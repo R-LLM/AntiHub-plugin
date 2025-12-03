@@ -552,9 +552,6 @@ async function generateRequestBody(openaiMessages, modelName, parameters, openai
     };
   }
   
-  // 打印请求体
-  logger.info('发送给上游的请求体:', JSON.stringify(requestBody, null, 2));
-  
   return requestBody;
 }
 /**

@@ -379,6 +379,9 @@ router.post('/api/oauth/callback/manual', authenticateApiKey, async (req, res) =
         cookie_id: account.cookie_id,
         user_id: account.user_id,
         is_shared: account.is_shared,
+        project_id_0: account.project_id_0,
+        is_restricted: account.is_restricted,
+        ineligible: account.ineligible,
         created_at: account.created_at
       }
     });
