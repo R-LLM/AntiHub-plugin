@@ -1309,6 +1309,11 @@ router.post('/v1/chat/completions', authenticateApiKey, async (req, res) => {
         res.write('data: [DONE]\n\n');
         res.end();
       } catch (error) {
+        // 如果已经在回调中处理过错误并结束了响应，直接返回
+        if (hasError) {
+          return;
+        }
+
         // 流式错误处理：在流中发送错误信息
         logger.error('生成响应失败:', error.message);
         
