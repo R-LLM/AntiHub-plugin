@@ -260,11 +260,15 @@ class MultiAccountClient {
           // 检查是否是 INVALID_ARGUMENT 或 invalid_request_error 错误（请求参数问题，不应禁用账号）
           if (responseText.includes('INVALID_ARGUMENT') || responseText.includes('invalid_request_error')) {
             logger.warn(`[400错误] 参数错误(INVALID_ARGUMENT/invalid_request_error)，不禁用账号: cookie_id=${account.cookie_id}, error=${responseText.substring(0, 200)}`);
+            // 将上游响应传递给回调，以便 dump
+            callback({ type: 'error', content: responseText, upstreamResponse: responseText, upstreamRequest: requestBody });
             throw new ApiError(responseText, response.status, responseText);
           }
           // 其他400错误，禁用账号
           logger.warn(`账号请求失败(400)，已禁用: cookie_id=${account.cookie_id}, error=${responseText.substring(0, 200)}`);
           await accountService.updateAccountStatus(account.cookie_id, 0);
+          // 将上游响应传递给回调，以便 dump
+          callback({ type: 'error', content: responseText, upstreamResponse: responseText, upstreamRequest: requestBody });
           throw new ApiError(responseText, response.status, responseText);
         }
         
@@ -274,6 +278,8 @@ class MultiAccountClient {
           callback({ type: 'error', content: 'RESOURCE_EXHAUSTED' });
           return;
         } else {
+          // 将上游响应传递给回调，以便 dump
+          callback({ type: 'error', content: responseText, upstreamResponse: responseText, upstreamRequest: requestBody });
           throw new ApiError(responseText, response.status, responseText);
         }
       }

@@ -618,6 +618,47 @@ function generateImageRequestBody(prompt, modelName, imageConfig = {}, account =
   
   
   return requestBody;
+/**
+ * 将错误现场（用户请求、上游请求、上游响应）转储到文件
+ * @param {Object} userRequest - 用户原始请求体
+ * @param {Object} upstreamRequest - 发送给上游的请求体
+ * @param {string|Object} upstreamResponse - 上游返回的响应内容
+ * @param {string} errorInfo - 错误信息描述
+ */
+async function dumpErrorArtifacts(userRequest, upstreamRequest, upstreamResponse, errorInfo) {
+  try {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `errordump-${timestamp}.json`;
+    const filepath = path.join(process.cwd(), filename);
+    
+    const dumpData = {
+      timestamp: new Date().toISOString(),
+      error: errorInfo,
+      user_request: userRequest,
+      upstream_request: upstreamRequest,
+      upstream_response: upstreamResponse
+    };
+    
+    // 如果响应是JSON字符串，尝试解析以便更好阅读
+    if (typeof upstreamResponse === 'string') {
+      try {
+        dumpData.upstream_response_parsed = JSON.parse(upstreamResponse);
+      } catch (e) {
+        // 忽略解析错误
+      }
+    }
+    
+    await fs.writeFile(filepath, JSON.stringify(dumpData, null, 2), 'utf8');
+    logger.info(`错误现场已转储至文件: ${filepath}`);
+    return filepath;
+  } catch (error) {
+    logger.error('转储错误现场失败:', error.message);
+    return null;
+  }
+}
 }
 
 export{
@@ -626,5 +667,6 @@ export{
   generateProjectId,
   generateRequestBody,
   generateImageRequestBody,
-  injectSignatures
+  injectSignatures,
+  dumpErrorArtifacts
 }
