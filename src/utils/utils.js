@@ -351,7 +351,7 @@ function openaiMessageToAntigravity(openaiMessages, isCompletionModel = false, m
 function generateGenerationConfig(parameters, enableThinking, actualModelName, isNonChatModel = false) {
   // thinking 模型的 max_tokens 最小值为 2048
   let maxOutputTokens = parameters.max_tokens ?? config.defaults.max_tokens;
-  if (enableThinking && maxOutputTokens < 2048) {
+  if (effectiveEnableThinking && maxOutputTokens < 2048) {
     maxOutputTokens = 2048;
   }
 
@@ -380,12 +380,12 @@ function generateGenerationConfig(parameters, enableThinking, actualModelName, i
   // gemini-2.5-flash-image 不支持 thinkingConfig 参数
   if (actualModelName !== 'gemini-2.5-flash-image') {
     generationConfig.thinkingConfig = {
-      includeThoughts: enableThinking,
-      thinkingBudget: enableThinking ? 1024 : 0
+      includeThoughts: effectiveEnableThinking,
+      thinkingBudget: effectiveEnableThinking ? 1024 : 0
     };
   }
 
-  if (enableThinking && actualModelName.includes("claude")) {
+  if (effectiveEnableThinking && actualModelName.includes("claude")) {
     delete generationConfig.topP;
   }
 
@@ -533,6 +533,7 @@ async function generateRequestBody(openaiMessages, modelName, parameters, openai
 
   // 用于生成配置的基础模型名（去掉-thinking后缀用于某些配置判断）
   const baseModelName = actualModelName.endsWith('-thinking') ? actualModelName.slice(0, -9) : actualModelName;
+  const isImageModel = baseModelName.endsWith('-image');
 
   // 检测并拒绝不支持的模型类型
   const isChatModel = baseModelName.startsWith('chat_');  // chat_ 开头的内部补全模型
@@ -541,8 +542,28 @@ async function generateRequestBody(openaiMessages, modelName, parameters, openai
     throw new Error(`Unsupported completion model: ${baseModelName}`);
   }
 
-  // 标准对话模型使用标准格式
-  const generationConfig = generateGenerationConfig(parameters, enableThinking, baseModelName, false);
+  // 检查是否需要强制禁用 thinking
+  // 对于非 Gemini 的思考模型（如 Claude），只有在以下情况才禁用 thinking 功能：
+  // 1. 最后一条助手消息没有思考内容
+  // 2. 且没有存储的 signature 可用于注入
+  // 如果有存储的 signature，可以通过注入来满足 API 要求，不需要禁用
+  // 注意：Gemini 模型和 rev19-uic3-1p 不需要强制禁用思考，因为它们可以处理没有思考内容的情况
+  const isGeminiModel = baseModelName.startsWith('gemini-');
+  const isRev19Model = modelName === 'rev19-uic3-1p';
+  let forceDisableThinking = false;
+  if (enableThinking && !isImageModel && !isGeminiModel && !isRev19Model) {
+    const hasThinkingContent = hasThinkingContentInLastAssistant(openaiMessages);
+    if (!hasThinkingContent && !storedSignature) {
+      logger.info('最后一条助手消息没有思考内容且没有存储的 signature，禁用 thinking 功能');
+      forceDisableThinking = true;
+    }
+  }
+
+  // 计算实际的 enableThinking 状态（用于消息转换）
+  const effectiveEnableThinking = forceDisableThinking ? false : enableThinking;
+
+  // 标准对话模型使用标准格式，传入 forceDisableThinking 参数
+  const generationConfig = generateGenerationConfig(parameters, enableThinking, baseModelName, false, forceDisableThinking);
 
   // 如果最后一条消息是 tool，移除 thinkingBudget 字段
   if (isLastMessageTool && generationConfig.thinkingConfig) {
